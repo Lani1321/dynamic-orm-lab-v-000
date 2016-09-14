@@ -4,10 +4,12 @@ require 'pry'
 
 class InteractiveRecord
 
+  # Creates a downcased, plural table name based on the Class name
   def self.table_name
     self.to_s.downcase.pluralize
   end
   
+  # Returns an array of SQL column names
   def self.column_names
     DB[:conn].results_as_hash = true
 
@@ -20,5 +22,52 @@ class InteractiveRecord
     end
     column_names.compact
   end
+
+  # Creates a new student with attributes
+  def initialize(options={})
+    options.each do |property, value|
+      self.send("#{property}=", value)
+    end
+  end
+
+  def save
+    sql = "INSERT INTO #{table_name_for_insert} (#{col_names_for_insert}) VALUES (#{values_for_insert})"
+    DB[:conn].execute(sql)
+    @id = DB[:conn].execute("SELECT last_insert_rowid() FROM #{table_name_for_insert}") [0][0]
+  end
+
+  def table_name_for_insert
+    self.class.table_name
+  end
+
+  def values_for_insert
+    values = []
+    self.class.column_names.each do |col_name|
+      values << "'#{send(col_name)}'" unless send(col_name).nil?
+    end
+    values.join(", ")
+  end
+
+  def col_names_for_insert
+    self.class.column_names.delete_if {|col| col == "id"}.join(", ")
+  end
+
+  def self.find_by(attributes)
+    array = []
+      attributes.each do |key, value|
+      value = "'#{value}'" if value.class == String
+      array << key.to_s + " = #{value}"
+    end
+    array = array.join(" AND ")
+
+    sql = "SELECT * FROM #{self.table_name} WHERE #{array};"
+    DB[:conn].execute(sql)
+ end
+
+   def self.find_by_name(name)
+    sql = "SELECT * FROM #{self.table_name} WHERE name = '#{name}'"
+    DB[:conn].execute(sql)
+  end
+
 end
-# binding.pry
+
